@@ -1,0 +1,1098 @@
+<!-- templates/route.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChargeRoute - Route Details</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+            border-radius: 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <header class="bg-white shadow-sm py-4 mb-6">
+        <div class="container mx-auto px-4">
+            <h1 class="text-2xl font-bold text-indigo-600">ChargeRoute</h1>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4">
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Route Details</h2>
+            <div class="text-gray-600">
+                <p>From: {{ from_location }}</p>
+                <p>To: {{ to_location }}</p>
+                <p class="mt-2">Estimated Range: {{ "%.1f"|format(estimated_range) }} km</p>
+            </div>
+        </div>
+
+        <!-- Add this after the route details section -->
+        {% if single_route_message %}
+        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-yellow-700">
+                        {{ single_route_message }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Route Selection -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-lg font-semibold mb-4">Available Routes</h3>
+                    <div class="space-y-4" id="routes-container">
+                        {% for route in routes %}
+                        <div class="border rounded-lg p-4 cursor-pointer hover:bg-gray-50 transition-colors duration-200 {% if loop.index0 == 0 %}bg-indigo-50 border-indigo-300{% endif %}"
+                             id="route-option-{{ route.id }}"
+                             onclick="showRoute({{ route.id }})">
+                            <h4 class="font-medium">Route {{ route.id + 1 }}</h4>
+                            <p class="text-sm text-gray-600">Distance: {{ route.distance }} km</p>
+                            <p class="text-sm text-gray-600">Duration: {{ route.duration }} mins</p>
+                            <p class="text-sm text-gray-600">
+                                Charging Stations: {{ route.charging_stations|length }}
+                            </p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Legend for station markers -->
+                <div class="bg-white rounded-xl shadow-lg p-6 mt-6">
+                    <h3 class="text-lg font-semibold mb-4">Legend</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-center">
+                            <img src="https://maps.google.com/mapfiles/ms/icons/blue-dot.png" alt="Google Maps" class="mr-2" style="width: 20px; height: 20px;">
+                            <span class="text-sm">Google Maps Charging Station</span>
+                        </div>
+                        <div class="flex items-center">
+                            <img src="https://maps.google.com/mapfiles/ms/icons/green-dot.png" alt="Open Charge Map" class="mr-2" style="width: 20px; height: 20px;">
+                            <span class="text-sm">Open Charge Map Station</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div id="map"></div>
+                </div>
+
+                <!-- Charging Stations -->
+                <div id="stations-container" class="mt-6 bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-lg font-semibold mb-4">Charging Stations</h3>
+                    <div id="stations-list" class="space-y-4">
+                        <!-- Stations will be populated by JavaScript -->
+                        <p id="no-stations-message" class="text-gray-500 text-center py-4 hidden">No charging stations found on this route.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Station Info Modal -->
+        <div id="station-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-xl shadow-lg p-6 max-w-md w-full mx-4">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 id="modal-title" class="text-lg font-semibold"></h3>
+                    <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div id="modal-content" class="space-y-3"></div>
+                <div class="mt-6 flex justify-end">
+                    <button id="modal-directions-btn" class="mr-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition duration-200">
+                        Get Directions
+                    </button>
+                    <button onclick="closeModal()" class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 transition duration-200">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Amenities Modal -->
+        <div id="amenities-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-xl shadow-lg w-full max-w-4xl mx-4 overflow-hidden">
+                <div class="flex justify-between items-center p-4 border-b">
+                    <h3 id="amenities-modal-title" class="text-lg font-semibold">Nearby Amenities</h3>
+                    <button onclick="closeAmenitiesModal()" class="text-gray-500 hover:text-gray-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 h-[500px]">
+                    <!-- Sidebar -->
+                    <div class="lg:col-span-1 bg-white border-r border-gray-200 overflow-hidden">
+                        <!-- Station Info -->
+                        <div class="p-4 border-b border-gray-200">
+                            <h2 class="text-xl font-semibold mb-2" id="station-name"></h2>
+                            <p class="text-gray-600" id="station-address"></p>
+                            <div class="mt-2 flex items-center">
+                                <span id="station-status" class="px-2 py-1 rounded text-sm"></span>
+                            </div>
+                        </div>
+
+                        <!-- Category Tabs -->
+                        <div class="p-4 border-b border-gray-200">
+                            <div class="flex space-x-2 overflow-x-auto pb-2">
+                                <button class="px-3 py-1.5 bg-indigo-600 text-white rounded-full text-sm amenity-tab active" data-type="all">All</button>
+                                <button class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-full text-sm amenity-tab" data-type="restaurant">🍽️ Restaurants</button>
+                                <button class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-full text-sm amenity-tab" data-type="cafe">☕ Cafes</button>
+                                <button class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-full text-sm amenity-tab" data-type="restroom">🚻 Restrooms</button>
+                                <button class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-full text-sm amenity-tab" data-type="tourist_spot">🏛️ Attractions</button>
+                            </div>
+                        </div>
+
+                        <!-- Amenities List -->
+                        <div class="p-4 overflow-y-auto" style="max-height: 350px;">
+                            <div id="amenities-list-container">
+                                <div class="flex justify-center items-center h-32">
+                                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Map -->
+                    <div class="lg:col-span-2 relative">
+                        <div id="amenities-map" class="w-full h-full"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Global variables
+        let map;
+        let markers = [];
+        let routeLines = [];
+        let currentRouteId = 0;
+        let selectedMarker = null;
+        let infoWindows = [];
+        let routes = {{ routes|tojson|safe }};
+
+        // Initialize map
+        function initMap() {
+            console.log("Initializing map...");
+
+            // Default center (first route's first point or India)
+            const defaultCenter = routes && routes.length > 0 && routes[0].points.length > 0
+                ? { lat: routes[0].points[0].lat, lng: routes[0].points[0].lng }
+                : { lat: 20.5937, lng: 78.9629 };
+
+            // Create map
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 5,
+                center: defaultCenter,
+                mapTypeControl: true,
+                fullscreenControl: true,
+                streetViewControl: false
+            });
+
+            console.log("Map created, showing initial route");
+
+            // Show first route
+            if (routes && routes.length > 0) {
+                showRoute(0);
+            }
+        }
+
+        // Show route on map
+        function showRoute(routeId) {
+            console.log("Showing route:", routeId);
+
+            // Clear existing markers and routes
+            clearMap();
+
+            const route = routes[routeId];
+            if (!route || !route.points || route.points.length === 0) {
+                console.error("Invalid route data");
+                return;
+            }
+
+            console.log("Route data:", route);
+            console.log("Number of charging stations:", route.charging_stations ? route.charging_stations.length : 0);
+
+            // Create bounds
+            const bounds = new google.maps.LatLngBounds();
+
+            // Create route line
+            const routePath = new google.maps.Polyline({
+                path: route.points,
+                geodesic: true,
+                strokeColor: '#4F46E5',
+                strokeOpacity: 1.0,
+                strokeWeight: 3,
+                map: map
+            });
+            routeLines.push(routePath);
+
+            // Add start and end markers
+            const startPoint = route.points[0];
+            const endPoint = route.points[route.points.length - 1];
+
+            // Start marker
+            const startMarker = new google.maps.Marker({
+                position: startPoint,
+                map: map,
+                icon: {
+                    url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
+                    scaledSize: new google.maps.Size(32, 32)
+                },
+                title: 'Start'
+            });
+            markers.push(startMarker);
+            bounds.extend(startPoint);
+
+            // End marker
+            const endMarker = new google.maps.Marker({
+                position: endPoint,
+                map: map,
+                icon: {
+                    url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+                    scaledSize: new google.maps.Size(32, 32)
+                },
+                title: 'End'
+            });
+            markers.push(endMarker);
+            bounds.extend(endPoint);
+
+            // Add charging station markers
+            if (route.charging_stations && route.charging_stations.length > 0) {
+                console.log('Adding charging stations:', route.charging_stations.length);
+                route.charging_stations.forEach((station, index) => {
+                    if (!station.lat || !station.lng) {
+                        console.error('Invalid station coordinates:', station);
+                        return;
+                    }
+
+                    const position = { lat: parseFloat(station.lat), lng: parseFloat(station.lng) };
+
+                    // Create marker
+                    const marker = new google.maps.Marker({
+                        position: position,
+                        map: map,
+                        icon: {
+                            url: station.source === 'google' 
+                                ? 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png'
+                                : 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
+                            scaledSize: new google.maps.Size(32, 32)
+                        },
+                        title: station.name,
+                        animation: google.maps.Animation.DROP
+                    });
+
+                    // Create detailed info window content
+                    const infoWindow = new google.maps.InfoWindow({
+                        content: `
+                            <div style="padding: 10px; max-width: 200px;">
+                                <h3 style="font-weight: bold; margin-bottom: 5px;">${station.name}</h3>
+                                <p style="margin-bottom: 5px;">${station.address}</p>
+                                <p style="margin-bottom: 5px;">Source: ${station.source}</p>
+                                ${station.rating ? `<p style="margin-bottom: 5px;">Rating: ${station.rating}</p>` : ''}
+                                ${station.power_kw ? `<p style="margin-bottom: 5px;">Power: ${station.power_kw}kW</p>` : ''}
+                                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                                    <button 
+                                        onclick="showStationInfo(${index})"
+                                        style="background-color: #4F46E5; color: white; padding: 4px 8px; border-radius: 4px;">
+                                        More Details
+                                    </button>
+                                    <button 
+                                        onclick="showAmenities(${index}, ${currentRouteId})"
+                                        style="background-color: #10B981; color: white; padding: 4px 8px; border-radius: 4px;">
+                                        Nearby Amenities
+                                    </button>
+                                </div>
+                            </div>
+                        `
+                    });
+
+                    // Add click listener
+                    marker.addListener('click', () => {
+                        // Close all other info windows
+                        infoWindows.forEach(iw => iw.close());
+                        infoWindow.open(map, marker);
+                    });
+
+                    markers.push(marker);
+                    infoWindows.push(infoWindow);
+                    bounds.extend(position);
+                });
+            }
+
+            // Extend bounds with all route points
+            route.points.forEach(point => {
+                bounds.extend(new google.maps.LatLng(point.lat, point.lng));
+            });
+
+            // Fit map to bounds with padding
+            map.fitBounds(bounds, {
+                padding: {
+                    top: 50,
+                    right: 50,
+                    bottom: 50,
+                    left: 50
+                }
+            });
+
+            // Update UI
+            updateRouteSelection(routeId);
+            updateStationsList(route.charging_stations);
+            currentRouteId = routeId;
+        }
+
+        // Clear map
+        function clearMap() {
+            // Close all info windows
+            if (infoWindows) {
+                infoWindows.forEach(iw => iw.close());
+            }
+
+            // Clear markers
+            if (markers) {
+                markers.forEach(marker => {
+                    if (marker && marker.setMap) {
+                        marker.setMap(null);
+                    }
+                });
+            }
+
+            // Clear route lines
+            if (routeLines) {
+                routeLines.forEach(line => {
+                    if (line && line.setMap) {
+                        line.setMap(null);
+                    }
+                });
+            }
+
+            // Reset arrays
+            markers = [];
+            routeLines = [];
+            infoWindows = [];
+        }
+
+        // Update route selection UI
+        function updateRouteSelection(routeId) {
+            document.querySelectorAll('#routes-container > div').forEach(div => {
+                div.classList.remove('bg-indigo-50', 'border-indigo-300');
+            });
+            const selectedRoute = document.getElementById(`route-option-${routeId}`);
+            if (selectedRoute) {
+                selectedRoute.classList.add('bg-indigo-50', 'border-indigo-300');
+            }
+        }
+
+        // Update stations list
+        function updateStationsList(stations) {
+            const container = document.getElementById('stations-list');
+            const noStationsMessage = document.getElementById('no-stations-message');
+
+            if (!container || !noStationsMessage) {
+                console.error('Station list elements not found');
+                return;
+            }
+
+            // Clear existing content
+            container.innerHTML = '';
+
+            if (!stations || stations.length === 0) {
+                noStationsMessage.classList.remove('hidden');
+                container.appendChild(noStationsMessage);
+                return;
+            }
+
+            noStationsMessage.classList.add('hidden');
+
+            stations.forEach((station, index) => {
+                const div = document.createElement('div');
+                div.className = 'border rounded-lg p-4 hover:bg-gray-50 transition-colors duration-200 mb-4';
+
+                const sourceLabel = station.source === 'ocm' ? 'Open Charge Map' : 'Google Maps';
+                const sourceColor = station.source === 'ocm' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800';
+
+                div.innerHTML = `
+                    <div class="flex items-center justify-between cursor-pointer" onclick="toggleStationDetails(${index})">
+                        <div>
+                            <h4 class="font-medium">${station.name}</h4>
+                            <p class="text-sm text-gray-600">${station.address}</p>
+                        </div>
+                        <div class="flex flex-col items-end">
+                            <span class="text-sm px-2 py-1 rounded mb-2 ${
+                                station.is_operational ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }">
+                                ${station.is_operational ? 'Operational' : 'Not Operational'}
+                            </span>
+                            <span class="text-xs px-2 py-1 rounded ${sourceColor}">
+                                ${sourceLabel}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div id="station-details-${index}" class="hidden mt-4 border-t pt-4">
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            ${station.source === 'ocm' ? 
+                                `<div>
+                                    <p class="text-sm text-gray-600"><strong>Power:</strong> ${station.power_kw}kW</p>
+                                    ${station.connectors ? 
+                                        `<p class="text-sm text-gray-600"><strong>Connectors:</strong> ${
+                                            Array.isArray(station.connectors) ? station.connectors.join(', ') : 'Not specified'
+                                        }</p>` : ''
+                                    }
+                                </div>` :
+                                `<div>
+                                    <p class="text-sm text-gray-600"><strong>Rating:</strong> ${station.rating || 'N/A'}</p>
+                                </div>`
+                            }
+                        </div>
+
+                        <div class="flex space-x-2">
+                            <button onclick="showStationOnMap(${index})" 
+                                    class="text-sm px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition duration-200">
+                                Show on Map
+                            </button>
+                            <button onclick="getDirections(${station.lat}, ${station.lng})" 
+                                    class="text-sm px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition duration-200">
+                                Get Directions
+                            </button>
+                            <button onclick="loadNearbyAmenities(${index}, ${currentRouteId})" 
+                                    class="text-sm px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition duration-200">
+                                View Amenities
+                            </button>
+                        </div>
+
+                        <div id="amenities-container-${index}" class="mt-4 hidden">
+                            <h5 class="font-medium text-sm mb-2">Nearby Amenities</h5>
+                            <div id="amenities-content-${index}" class="text-sm">
+                                <div class="flex justify-center">
+                                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                container.appendChild(div);
+            });
+        }
+
+        // Add these new functions after updateStationsList
+        function toggleStationDetails(index) {
+            const detailsDiv = document.getElementById(`station-details-${index}`);
+            if (detailsDiv) {
+                detailsDiv.classList.toggle('hidden');
+            }
+        }
+
+        function showStationOnMap(index) {
+            if (markers[index + 2]) { // +2 because first two markers are start and end points
+                google.maps.event.trigger(markers[index + 2], 'click');
+                map.panTo(markers[index + 2].getPosition());
+                map.setZoom(15);
+            }
+        }
+
+        function getDirections(lat, lng) {
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+        }
+
+        async function loadNearbyAmenities(stationIndex, routeId) {
+            const amenitiesContainer = document.getElementById(`amenities-container-${stationIndex}`);
+            const amenitiesContent = document.getElementById(`amenities-content-${stationIndex}`);
+
+            if (!amenitiesContainer || !amenitiesContent) return;
+
+            amenitiesContainer.classList.remove('hidden');
+
+            try {
+                // Create fetch options with proper headers
+                const options = {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin' // This ensures cookies (session) are sent
+                };
+
+                const response = await fetch(`/amenities/${stationIndex}?route_id=${routeId}&station_index=${stationIndex}`, options);
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to fetch amenities');
+                }
+
+                const data = await response.json();
+
+                let html = '';
+
+                // Process each amenity type
+                for (const [type, places] of Object.entries(data.amenities)) {
+                    if (places.length > 0) {
+                        const icon = {
+                            restaurant: '🍽️',
+                            cafe: '☕',
+                            restroom: '🚻',
+                            tourist_spot: '🏛️'
+                        }[type];
+
+                        const typeName = {
+                            restaurant: 'Restaurants',
+                            cafe: 'Cafes',
+                            restroom: 'Restrooms',
+                            tourist_spot: 'Tourist Spots'
+                        }[type];
+
+                        html += `
+                            <div class="mb-3">
+                                <h6 class="font-medium mb-1">${icon} ${typeName}</h6>
+                                <ul class="space-y-1">
+                                    ${places.slice(0, 3).map(place => `
+                                        <li class="flex justify-between">
+                                            <span class="truncate mr-2" title="${place.name}">${place.name}</span>
+                                            <span class="text-gray-500 whitespace-nowrap">${(place.distance/1000).toFixed(1)}km</span>
+                                        </li>
+                                    `).join('')}
+                                </ul>
+                                ${places.length > 3 ? `<p class="text-xs text-indigo-600 mt-1">+${places.length - 3} more</p>` : ''}
+                            </div>
+                        `;
+                    }
+                }
+
+                if (html) {
+                    amenitiesContent.innerHTML = html;
+                } else {
+                    amenitiesContent.innerHTML = '<p class="text-gray-500">No amenities found nearby</p>';
+                }
+
+            } catch (error) {
+                console.error('Error loading amenities:', error);
+                amenitiesContent.innerHTML = `<p class="text-red-500">${error.message || 'Failed to load amenities'}</p>`;
+            }
+        }
+
+        function showStationInfo(markerIndex) {
+            const station = routes[currentRouteId].charging_stations[markerIndex];
+            const modal = document.getElementById('station-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+            const modalDirectionsBtn = document.getElementById('modal-directions-btn');
+
+            modalTitle.textContent = station.name;
+
+            // Generate content based on station source
+            const sourceLabel = station.source === 'ocm' ? 'Open Charge Map' : 'Google Maps';
+            const sourceColorClass = station.source === 'ocm' ? 'text-green-600' : 'text-blue-600';
+
+            let content = `
+                <p><strong>Address:</strong> ${station.address}</p>
+                <p><strong>Status:</strong> <span class="${
+                    station.is_operational ? 'text-green-600' : 'text-red-600'
+                }">${station.is_operational ? 'Operational' : 'Not Operational'}</span></p>
+                <p><strong>Data Source:</strong> <span class="${sourceColorClass}">${sourceLabel}</span></p>
+            `;
+
+            // Add source-specific details
+            if (station.source === 'ocm') {
+                content += `
+                    <p><strong>Power:</strong> ${station.power_kw}kW</p>
+                    <p><strong>Connectors:</strong> ${
+                        Array.isArray(station.connectors) ? station.connectors.join(', ') : 'Not specified'
+                    }</p>
+                `;
+            } else {
+                content += `<p><strong>Rating:</strong> ${station.rating}</p>`;
+            }
+
+            modalContent.innerHTML = content;
+
+            // Set up directions button
+            modalDirectionsBtn.onclick = () => {
+                window.open(`https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`, '_blank');
+            };
+
+            // Show modal
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('station-modal').classList.add('hidden');
+        }
+
+        // Close modal when clicking outside
+        window.onclick = (event) => {
+            const modal = document.getElementById('station-modal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        };
+
+        // Add this function to handle amenities navigation
+        function showAmenities(stationIndex, routeId) {
+            const station = routes[routeId].charging_stations[stationIndex];
+
+            // Set station info in the modal
+            document.getElementById('station-name').textContent = station.name;
+            document.getElementById('station-address').textContent = station.address;
+
+            const statusElement = document.getElementById('station-status');
+            statusElement.textContent = station.is_operational ? 'Operational' : 'Not Operational';
+            statusElement.className = 'px-2 py-1 rounded text-sm ' + 
+                (station.is_operational ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800');
+
+            // Show the modal
+            document.getElementById('amenities-modal').classList.remove('hidden');
+
+            // Initialize the amenities map
+            initAmenitiesMap(station);
+
+            // Fetch amenities data
+            fetchAmenities(stationIndex, routeId);
+        }
+
+        function closeAmenitiesModal() {
+            document.getElementById('amenities-modal').classList.add('hidden');
+
+            // Clear amenities markers
+            if (amenitiesMarkers) {
+                amenitiesMarkers.forEach(marker => marker.setMap(null));
+            }
+            amenitiesMarkers = [];
+        }
+
+        let amenitiesMap;
+        let amenitiesMarkers = [];
+        let amenitiesData = {};
+
+        function initAmenitiesMap(station) {
+            const mapElement = document.getElementById('amenities-map');
+
+            // Create map centered on the station
+            amenitiesMap = new google.maps.Map(mapElement, {
+                center: { lat: parseFloat(station.lat), lng: parseFloat(station.lng) },
+                zoom: 15,
+                mapTypeControl: true,
+                fullscreenControl: true,
+                streetViewControl: false,
+                styles: [
+                    {
+                        featureType: "poi",
+                        elementType: "labels",
+                        stylers: [{ visibility: "off" }]
+                    }
+                ]
+            });
+
+            // Add station marker
+            const stationMarker = new google.maps.Marker({
+                position: { lat: parseFloat(station.lat), lng: parseFloat(station.lng) },
+                map: amenitiesMap,
+                icon: {
+                    url: station.source === 'google' 
+                        ? 'https://maps.googleapis.com/maps/api/js/ViewportInfoService.GetViewportInfo/1/1/0/0/0/0/0/0/0/0/0/1?1m6&1m2&1d17.0646&2d78.0080&2m3&1e0&2sm1&3s0x0%3A0x0&4m2&1sCgIgAQ%3D%3D&2e4'
+                        : 'https://maps.googleapis.com/maps/api/js/ViewportInfoService.GetViewportInfo/1/1/0/0/0/0/0/0/0/0/0/1?1m6&1m2&1d17.0646&2d78.0080&2m3&1e0&2sm1&3s0x0%3A0x0&4m2&1sCgIgAQ%3D%3D&2e4',
+                    scaledSize: new google.maps.Size(40, 40)
+                },
+                title: station.name,
+                zIndex: 1000
+            });
+
+            // Add info window for station
+            const infoWindow = new google.maps.InfoWindow({
+                content: `
+                    <div style="padding: 10px; max-width: 200px;">
+                        <h3 style="font-weight: bold; margin-bottom: 5px;">${station.name}</h3>
+                        <p style="margin-bottom: 5px;">${station.address}</p>
+                        <p style="margin-bottom: 5px;">Source: ${station.source}</p>
+                        ${station.rating ? `<p style="margin-bottom: 5px;">Rating: ${station.rating}</p>` : ''}
+                        ${station.power_kw ? `<p style="margin-bottom: 5px;">Power: ${station.power_kw}kW</p>` : ''}
+                    </div>
+                `
+            });
+
+            stationMarker.addListener('click', () => {
+                infoWindow.open(amenitiesMap, stationMarker);
+            });
+
+            // Open info window by default
+            infoWindow.open(amenitiesMap, stationMarker);
+        }
+
+        async function fetchAmenities(stationIndex, routeId) {
+            const listContainer = document.getElementById('amenities-list-container');
+
+            try {
+                // Create fetch options with proper headers
+                const options = {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin' // This ensures cookies (session) are sent
+                };
+
+                // Use the current route data directly instead of making a new request
+                // This avoids session issues
+                const station = routes[routeId].charging_stations[stationIndex];
+
+                if (!station) {
+                    throw new Error("Station not found in current route data");
+                }
+
+                // Fetch nearby places using Google Places API directly from the client
+                await fetchNearbyPlaces(station);
+
+            } catch (error) {
+                console.error('Error loading amenities:', error);
+                listContainer.innerHTML = `
+                    <div class="p-4 bg-red-50 text-red-700 rounded-lg">
+                        <p class="font-medium">Error loading amenities</p>
+                        <p class="text-sm">${error.message}</p>
+                        <p class="text-sm mt-2">Trying alternative method...</p>
+                    </div>
+                `;
+
+                // Fallback to server request
+                try {
+                    const response = await fetch(`/amenities/${stationIndex}?route_id=${routeId}&station_index=${stationIndex}`, {
+                        method: 'GET',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Content-Type': 'application/json'
+                        },
+                        credentials: 'same-origin'
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to fetch amenities');
+                    }
+
+                    const data = await response.json();
+                    amenitiesData = data.amenities;
+
+                    // Display amenities and add markers
+                    displayAmenities(data.amenities);
+                    addAmenityMarkers(data.amenities, data.station);
+                } catch (fallbackError) {
+                    console.error('Fallback error:', fallbackError);
+                    listContainer.innerHTML = `
+                        <div class="p-4 bg-red-50 text-red-700 rounded-lg">
+                            <p class="font-medium">Could not load amenities</p>
+                            <p class="text-sm">${fallbackError.message}</p>
+                            <p class="text-sm mt-2">Please try again later.</p>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        // Add this new function to fetch places directly using the Maps JavaScript API
+        async function fetchNearbyPlaces(station) {
+            if (!window.google || !google.maps || !google.maps.places) {
+                throw new Error("Google Maps Places API not loaded");
+            }
+
+            const placesService = new google.maps.places.PlacesService(amenitiesMap);
+            const stationLocation = new google.maps.LatLng(parseFloat(station.lat), parseFloat(station.lng));
+
+            // Define search types and radii
+            const searchTypes = [
+                { type: 'restaurant', radius: 1000 },
+                { type: 'cafe', radius: 1000 },
+                { type: 'tourist_attraction', radius: 2000 }
+            ];
+
+            // Create a mock for restrooms (using convenience stores and shopping malls)
+            const restroomTypes = ['convenience_store', 'shopping_mall', 'gas_station'];
+
+            // Initialize amenities data structure
+            const amenities = {
+                restaurant: [],
+                cafe: [],
+                restroom: [],
+                tourist_spot: []
+            };
+
+            // Function to search for places of a specific type
+            const searchPlaces = (request) => {
+                return new Promise((resolve, reject) => {
+                    placesService.nearbySearch(request, (results, status) => {
+                        if (status === google.maps.places.PlacesServiceStatus.OK) {
+                            resolve(results);
+                        } else {
+                            resolve([]); // Return empty array on error to continue
+                        }
+                    });
+                });
+            };
+
+            // Search for each type
+            for (const searchType of searchTypes) {
+                const request = {
+                    location: stationLocation,
+                    radius: searchType.radius,
+                    type: searchType.type
+                };
+
+                const results = await searchPlaces(request);
+
+                // Map to the correct category
+                let category = searchType.type;
+                if (category === 'tourist_attraction') {
+                    category = 'tourist_spot';
+                }
+
+                // Process results
+                results.forEach(place => {
+                    const placeLocation = place.geometry.location;
+                    const distance = google.maps.geometry.spherical.computeDistanceBetween(
+                        stationLocation, placeLocation
+                    );
+
+                    amenities[category].push({
+                        name: place.name,
+                        lat: placeLocation.lat(),
+                        lng: placeLocation.lng(),
+                        rating: place.rating,
+                        vicinity: place.vicinity,
+                        distance: distance
+                    });
+                });
+            }
+
+            // Search for restrooms (using proxy types)
+            for (const restroomType of restroomTypes) {
+                const request = {
+                    location: stationLocation,
+                    radius: 500,
+                    type: restroomType
+                };
+
+                const results = await searchPlaces(request);
+
+                // Process results
+                results.forEach(place => {
+                    const placeLocation = place.geometry.location;
+                    const distance = google.maps.geometry.spherical.computeDistanceBetween(
+                        stationLocation, placeLocation
+                    );
+
+                    amenities.restroom.push({
+                        name: `Restroom at ${place.name}`,
+                        lat: placeLocation.lat(),
+                        lng: placeLocation.lng(),
+                        vicinity: place.vicinity,
+                        distance: distance
+                    });
+                });
+            }
+
+            // Sort each category by distance
+            for (const category in amenities) {
+                amenities[category].sort((a, b) => a.distance - b.distance);
+
+                // Limit to top 5 results
+                amenities[category] = amenities[category].slice(0, 5);
+            }
+
+            // Store and display the results
+            amenitiesData = amenities;
+            displayAmenities(amenities);
+            addAmenityMarkers(amenities, station);
+        }
+
+        function displayAmenities(amenities) {
+            const listContainer = document.getElementById('amenities-list-container');
+            let html = '';
+            let hasAnyAmenities = false;
+
+            // Process each amenity type
+            for (const [type, places] of Object.entries(amenities)) {
+                if (places.length > 0) {
+                    hasAnyAmenities = true;
+                    const icon = {
+                        restaurant: '🍽️',
+                        cafe: '☕',
+                        restroom: '🚻',
+                        tourist_spot: '🏛️'
+                    }[type];
+
+                    const typeName = {
+                        restaurant: 'Restaurants',
+                        cafe: 'Cafes',
+                        restroom: 'Restrooms',
+                        tourist_spot: 'Tourist Spots'
+                    }[type];
+
+                    html += `
+                        <div class="mb-5 amenity-group" data-type="${type}">
+                            <h4 class="font-medium mb-2">${icon} ${typeName}</h4>
+                            <ul class="space-y-2">
+                                ${places.map((place, idx) => `
+                                    <li class="p-2 hover:bg-gray-50 rounded cursor-pointer" 
+                                        onclick="focusAmenity('${type}', ${idx})">
+                                        <div class="flex justify-between">
+                                            <span class="font-medium">${place.name}</span>
+                                            <span class="text-gray-500 whitespace-nowrap">${(place.distance/1000).toFixed(1)}km</span>
+                                        </div>
+                                        ${place.rating ? `<div class="text-sm text-yellow-500">Rating: ${place.rating}⭐</div>` : ''}
+                                        ${place.vicinity ? `<div class="text-xs text-gray-500 truncate" title="${place.vicinity}">${place.vicinity}</div>` : ''}
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+            }
+
+            if (hasAnyAmenities) {
+                listContainer.innerHTML = html;
+            } else {
+                listContainer.innerHTML = '<p class="text-gray-500">No amenities found nearby</p>';
+            }
+
+            // Set up tab click handlers
+            document.querySelectorAll('.amenity-tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Update active tab styling
+                    document.querySelectorAll('.amenity-tab').forEach(t => {
+                        t.classList.remove('bg-indigo-600', 'text-white');
+                        t.classList.add('bg-gray-200', 'text-gray-700');
+                    });
+                    this.classList.remove('bg-gray-200', 'text-gray-700');
+                    this.classList.add('bg-indigo-600', 'text-white');
+
+                    const type = this.getAttribute('data-type');
+
+                    // Show/hide amenity groups based on selected tab
+                    document.querySelectorAll('.amenity-group').forEach(group => {
+                        if (type === 'all' || group.getAttribute('data-type') === type) {
+                            group.classList.remove('hidden');
+                        } else {
+                            group.classList.add('hidden');
+                        }
+                    });
+
+                    // Show/hide markers on the map
+                    amenitiesMarkers.forEach(marker => {
+                        if (type === 'all' || marker.type === type) {
+                            marker.setVisible(true);
+                        } else {
+                            marker.setVisible(false);
+                            if (marker.infoWindow) marker.infoWindow.close();
+                        }
+                    });
+                });
+            });
+        }
+
+        function addAmenityMarkers(amenities, station) {
+            // Clear existing markers
+            if (amenitiesMarkers) {
+                amenitiesMarkers.forEach(marker => marker.setMap(null));
+            }
+            amenitiesMarkers = [];
+
+            // Add markers for each amenity type
+            for (const [type, places] of Object.entries(amenities)) {
+                if (places.length > 0) {
+                    const icon = {
+                        restaurant: '🍽️',
+                        cafe: '☕',
+                        restroom: '🚻',
+                        tourist_spot: '🏛️'
+                    }[type];
+
+                    places.forEach((place, idx) => {
+                        const marker = new google.maps.Marker({
+                            position: { lat: place.lat, lng: place.lng },
+                            map: amenitiesMap,
+                            title: place.name,
+                            label: {
+                                text: icon,
+                                fontSize: '16px'
+                            },
+                            animation: google.maps.Animation.DROP
+                        });
+
+                        // Add info window
+                        const infoWindow = new google.maps.InfoWindow({
+                            content: `
+                                <div style="padding: 10px; max-width: 200px;">
+                                    <h3 style="font-weight: bold; margin-bottom: 5px;">${place.name}</h3>
+                                    ${place.vicinity ? `<p style="margin-bottom: 5px;">${place.vicinity}</p>` : ''}
+                                    ${place.rating ? `<p style="margin-bottom: 5px;">Rating: ${place.rating}⭐</p>` : ''}
+                                    <p style="margin-bottom: 5px;">Distance: ${(place.distance/1000).toFixed(1)}km</p>
+                                    <button onclick="window.open('https://www.google.com/maps/dir/?api=1&origin=${station.lat},${station.lng}&destination=${place.lat},${place.lng}', '_blank')"
+                                        style="background-color: #4F46E5; color: white; padding: 4px 8px; border-radius: 4px; margin-top: 5px;">
+                                        Get Directions
+                                    </button>
+                                </div>
+                            `
+                        });
+
+                        marker.addListener('click', () => {
+                            // Close all other info windows
+                            amenitiesMarkers.forEach(m => {
+                                if (m.infoWindow) m.infoWindow.close();
+                            });
+
+                            infoWindow.open(amenitiesMap, marker);
+                        });
+
+                        marker.type = type;
+                        marker.index = idx;
+                        marker.infoWindow = infoWindow;
+                        amenitiesMarkers.push(marker);
+                    });
+                }
+            }
+        }
+
+        function focusAmenity(type, index) {
+            // Find the marker
+            const marker = amenitiesMarkers.find(m => m.type === type && m.index === index);
+
+            if (marker) {
+                // Center map on marker
+                amenitiesMap.panTo(marker.getPosition());
+                amenitiesMap.setZoom(16);
+
+                // Close all info windows
+                amenitiesMarkers.forEach(m => {
+                    if (m.infoWindow) m.infoWindow.close();
+                });
+
+                // Open this marker's info window
+                marker.infoWindow.open(amenitiesMap, marker);
+            }
+        }
+    </script>
+
+    <!-- Load Google Maps API -->
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places,geometry&callback=initMap">
+    </script>
+</body>
+</html>

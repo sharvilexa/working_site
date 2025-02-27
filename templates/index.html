@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChargeRoute - EV Route Planner</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+    <script>
+        // Wait for DOM to be ready
+        function initAutocomplete() {
+            try {
+                console.log("Initializing autocomplete...");
+
+                // Get input elements
+                const fromInput = document.getElementById("from");
+                const toInput = document.getElementById("to");
+
+                // Check if elements exist
+                if (!fromInput || !toInput) {
+                    console.error("Input elements not found");
+                    return;
+                }
+
+                const options = {
+                    componentRestrictions: { country: "in" },
+                    fields: ["formatted_address", "geometry", "name"],
+                    types: ["geocode"]
+                };
+
+                // Initialize autocomplete for both inputs
+                const fromAutocomplete = new google.maps.places.Autocomplete(fromInput, options);
+                const toAutocomplete = new google.maps.places.Autocomplete(toInput, options);
+
+                // Prevent form submission on Enter key
+                fromInput.addEventListener("keydown", function(e) {
+                    if (e.key === "Enter") e.preventDefault();
+                });
+
+                toInput.addEventListener("keydown", function(e) {
+                    if (e.key === "Enter") e.preventDefault();
+                });
+
+                console.log("Autocomplete initialized successfully");
+            } catch (error) {
+                console.error("Error initializing autocomplete:", error);
+            }
+        }
+
+        // Define the callback function
+        function initCallback() {
+            console.log("Google Maps callback triggered");
+            // Wait for DOM to be fully loaded
+            if (document.readyState === 'complete') {
+                initAutocomplete();
+            } else {
+                window.addEventListener('load', initAutocomplete);
+            }
+        }
+    </script>
+
+    <style>
+        .gradient-background {
+            background: linear-gradient(135deg, #4F46E5 0%, #10B981 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <header class="bg-white shadow-sm py-4">
+        <div class="container mx-auto px-4">
+            <h1 class="text-2xl font-bold text-indigo-600">ChargeRoute</h1>
+        </div>
+    </header>
+
+    <main class="gradient-background min-h-screen py-12">
+        <div class="container mx-auto px-4">
+            <div class="max-w-md mx-auto bg-white rounded-xl shadow-lg p-6">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Plan Your EV Journey</h2>
+
+                <form action="/search" method="POST" class="space-y-6" id="searchForm">
+                    <div>
+                        <label for="from" class="block text-sm font-medium text-gray-700 mb-1">Starting Point</label>
+                        <input type="text" id="from" name="from" 
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                               placeholder="Enter starting location" required>
+                    </div>
+
+                    <div>
+                        <label for="to" class="block text-sm font-medium text-gray-700 mb-1">Destination</label>
+                        <input type="text" id="to" name="to" 
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                               placeholder="Enter destination" required>
+                    </div>
+
+                    <div>
+                        <label for="vehicle_model" class="block text-sm font-medium text-gray-700 mb-1">Vehicle Model</label>
+                        <select id="vehicle_model" name="vehicle_model" 
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="Model X">Tesla Model X</option>
+                            <option value="Model Y">Tesla Model Y</option>
+                            <option value="Tata Nexon">Tata Nexon EV</option>
+                            <option value="Mahindra e2o">Mahindra e2o</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="battery_level" class="block text-sm font-medium text-gray-700 mb-1">Battery Level (%)</label>
+                        <input type="number" id="battery_level" name="battery_level" 
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                               min="0" max="100" value="100" required>
+                    </div>
+
+                    <button type="submit" 
+                            id="submitBtn"
+                            class="w-full bg-indigo-600 text-white py-3 px-6 rounded-lg hover:bg-indigo-700 transition duration-200">
+                        Find Routes
+                    </button>
+
+                    <div id="loadingIndicator" class="hidden text-center">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                        <p class="mt-2 text-gray-600">Finding the best routes...</p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.getElementById('searchForm').addEventListener('submit', function() {
+            document.getElementById('submitBtn').classList.add('hidden');
+            document.getElementById('loadingIndicator').classList.remove('hidden');
+        });
+    </script>
+
+    <!-- Add this new script loading pattern -->
+    <script>
+        (function(g){var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.googleapis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
+            key: "{{ google_maps_api_key }}",
+            v: "weekly"
+        });
+    </script>
+
+    <script>
+        // Initialize the Places library
+        async function initMap() {
+            try {
+                const { Places } = await google.maps.importLibrary("places");
+                initAutocomplete();
+            } catch (error) {
+                console.error("Error loading Places library:", error);
+            }
+        }
+
+        // Call initMap when the page loads
+        window.addEventListener('load', initMap);
+    </script>
+</body>
+</html>
