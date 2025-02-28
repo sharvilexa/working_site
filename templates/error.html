@@ -3,284 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ChargeRoute - Nearby Amenities</title>
+    <title>ChargeRoute - Error</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <style>
-        #map {
-            height: calc(100vh - 64px);
-            width: 100%;
-        }
-        .amenity-list {
-            max-height: calc(100vh - 200px);
-            overflow-y: auto;
-        }
-    </style>
 </head>
 <body class="bg-gray-50">
-    <header class="bg-white shadow-sm py-4">
+    <header class="bg-white shadow-sm py-4 mb-6">
         <div class="container mx-auto px-4">
             <h1 class="text-2xl font-bold text-indigo-600">ChargeRoute</h1>
         </div>
     </header>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-0 h-[calc(100vh-64px)]">
-        <!-- Sidebar -->
-        <div class="lg:col-span-1 bg-white border-r border-gray-200 overflow-hidden">
-            <!-- Station Info -->
-            <div class="p-4 border-b border-gray-200">
-                <h2 class="text-xl font-semibold mb-2" id="station-name">{{ station.name }}</h2>
-                <p class="text-gray-600" id="station-address">{{ station.address }}</p>
-                <div class="mt-2 flex items-center">
-                    <span class="px-2 py-1 rounded text-sm {{ 'bg-green-100 text-green-800' if station.is_operational else 'bg-red-100 text-red-800' }}">
-                        {{ 'Operational' if station.is_operational else 'Not Operational' }}
-                    </span>
-                </div>
-            </div>
-
-            <!-- Filters -->
-            <div class="p-4 border-b border-gray-200">
-                <h3 class="font-medium mb-3">Filter Amenities</h3>
-                <div class="space-y-2">
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" class="form-checkbox text-indigo-600" checked onchange="toggleAmenityType('restaurant')">
-                        <span>🍽️ Restaurants</span>
-                    </label>
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" class="form-checkbox text-indigo-600" checked onchange="toggleAmenityType('cafe')">
-                        <span>☕ Cafes</span>
-                    </label>
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" class="form-checkbox text-indigo-600" checked onchange="toggleAmenityType('restroom')">
-                        <span>🚻 Restrooms</span>
-                    </label>
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" class="form-checkbox text-indigo-600" checked onchange="toggleAmenityType('tourist_spot')">
-                        <span>🏛️ Tourist Spots</span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- Amenities List -->
-            <div class="amenity-list p-4">
-                <h3 class="font-medium mb-3">Nearby Amenities</h3>
-                <div id="amenities-list" class="space-y-4">
-                    <!-- Amenities will be populated by JavaScript -->
+    <main class="container mx-auto px-4">
+        <div class="max-w-lg mx-auto bg-white rounded-xl shadow-lg p-6 mt-10">
+            <div class="text-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                
+                <h2 class="text-xl font-semibold mb-4">Error</h2>
+                <p class="text-gray-600 mb-6">{{ error }}</p>
+                
+                <div class="flex justify-center space-x-4">
+                    <a href="/" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition duration-200">
+                        Return Home
+                    </a>
+                    <button onclick="window.history.back()" class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 transition duration-200">
+                        Go Back
+                    </button>
                 </div>
             </div>
         </div>
-
-        <!-- Map -->
-        <div class="lg:col-span-2">
-            <div id="map"></div>
-        </div>
-    </div>
-
-    <script>
-        let map;
-        let markers = [];
-        let amenityMarkers = {};
-        const station = {{ station|tojson|safe }};
-        const amenities = {{ amenities|tojson|safe }};
-
-        // Initialize map
-        function initMap() {
-            const stationPosition = { 
-                lat: parseFloat(station.lat), 
-                lng: parseFloat(station.lng) 
-            };
-
-            map = new google.maps.Map(document.getElementById('map'), {
-                center: stationPosition,
-                zoom: 15,
-                mapTypeControl: true,
-                fullscreenControl: true,
-                streetViewControl: true
-            });
-
-            // Add charging station marker
-            const stationMarker = new google.maps.Marker({
-                position: stationPosition,
-                map: map,
-                icon: {
-                    url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
-                    scaledSize: new google.maps.Size(32, 32)
-                },
-                title: station.name
-            });
-
-            // Add station info window
-            const stationInfo = new google.maps.InfoWindow({
-                content: `
-                    <div class="p-2">
-                        <h3 class="font-bold">${station.name}</h3>
-                        <p>${station.address}</p>
-                        ${station.power_kw ? `<p>Power: ${station.power_kw}kW</p>` : ''}
-                    </div>
-                `
-            });
-
-            stationMarker.addListener('click', () => {
-                stationInfo.open(map, stationMarker);
-            });
-
-            // Show amenities
-            showAmenities();
-        }
-
-        // Show amenities on map and in list
-        function showAmenities() {
-            clearAmenityMarkers();
-            const bounds = new google.maps.LatLngBounds();
-            bounds.extend(new google.maps.LatLng(station.lat, station.lng));
-
-            // Initialize marker containers for each type
-            amenityMarkers = {
-                restaurant: [],
-                cafe: [],
-                restroom: [],
-                tourist_spot: []
-            };
-
-            // Add markers for each type of amenity
-            Object.keys(amenities).forEach(type => {
-                amenities[type].forEach(place => {
-                    const marker = createAmenityMarker(place, type);
-                    if (marker) {
-                        amenityMarkers[type].push(marker);
-                        bounds.extend(marker.getPosition());
-                    }
-                });
-            });
-
-            // Fit map to show all markers
-            map.fitBounds(bounds, {
-                padding: { top: 50, right: 50, bottom: 50, left: 50 }
-            });
-
-            // Update amenities list
-            updateAmenitiesList();
-        }
-
-        // Create marker for amenity
-        function createAmenityMarker(place, type) {
-            if (!place.lat || !place.lng) return null;
-
-            const position = {
-                lat: parseFloat(place.lat),
-                lng: parseFloat(place.lng)
-            };
-
-            const icons = {
-                restaurant: '🍽️',
-                cafe: '☕',
-                restroom: '🚻',
-                tourist_spot: '🏛️'
-            };
-
-            const marker = new google.maps.Marker({
-                position: position,
-                map: map,
-                title: place.name,
-                label: {
-                    text: icons[type],
-                    fontSize: '20px'
-                }
-            });
-
-            const infoWindow = new google.maps.InfoWindow({
-                content: `
-                    <div class="p-2">
-                        <h3 class="font-bold">${place.name}</h3>
-                        <p>${place.vicinity || place.address}</p>
-                        ${place.rating ? `<p>Rating: ${'⭐'.repeat(Math.round(place.rating))}</p>` : ''}
-                        ${place.distance ? `<p>Distance: ${(place.distance/1000).toFixed(1)}km</p>` : ''}
-                        <button 
-                            onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${position.lat},${position.lng}', '_blank')"
-                            class="mt-2 px-3 py-1 bg-indigo-600 text-white rounded text-sm">
-                            Get Directions
-                        </button>
-                    </div>
-                `
-            });
-
-            marker.addListener('click', () => {
-                infoWindow.open(map, marker);
-            });
-
-            return marker;
-        }
-
-        // Update amenities list in sidebar
-        function updateAmenitiesList() {
-            const container = document.getElementById('amenities-list');
-            container.innerHTML = '';
-
-            Object.keys(amenities).forEach(type => {
-                if (amenities[type].length > 0) {
-                    const typeTitle = type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    const section = document.createElement('div');
-                    section.className = 'mb-4';
-                    section.innerHTML = `
-                        <h4 class="font-medium mb-2">${typeTitle}s</h4>
-                        <div class="space-y-2">
-                            ${amenities[type].map(place => `
-                                <div class="border rounded p-3 hover:bg-gray-50 cursor-pointer"
-                                     onclick="focusAmenity('${type}', ${place.lat}, ${place.lng})">
-                                    <div class="flex justify-between items-start">
-                                        <h5 class="font-medium">${place.name}</h5>
-                                        ${place.rating ? `<span class="text-yellow-500">${'⭐'.repeat(Math.round(place.rating))}</span>` : ''}
-                                    </div>
-                                    <p class="text-sm text-gray-600">${place.vicinity || place.address}</p>
-                                    ${place.distance ? `
-                                        <p class="text-sm text-gray-500 mt-1">
-                                            ${(place.distance/1000).toFixed(1)}km away
-                                        </p>
-                                    ` : ''}
-                                </div>
-                            `).join('')}
-                        </div>
-                    `;
-                    container.appendChild(section);
-                }
-            });
-        }
-
-        // Focus on specific amenity
-        function focusAmenity(type, lat, lng) {
-            const position = { lat: parseFloat(lat), lng: parseFloat(lng) };
-            map.panTo(position);
-            map.setZoom(17);
-
-            // Find and trigger click on the corresponding marker
-            amenityMarkers[type].forEach(marker => {
-                if (marker.getPosition().equals(position)) {
-                    google.maps.event.trigger(marker, 'click');
-                }
-            });
-        }
-
-        // Toggle amenity type visibility
-        function toggleAmenityType(type) {
-            const visible = document.querySelector(`input[onchange="toggleAmenityType('${type}')"]`).checked;
-            if (amenityMarkers[type]) {
-                amenityMarkers[type].forEach(marker => {
-                    marker.setVisible(visible);
-                });
-            }
-        }
-
-        // Clear all amenity markers
-        function clearAmenityMarkers() {
-            Object.values(amenityMarkers).flat().forEach(marker => {
-                if (marker) marker.setMap(null);
-            });
-            amenityMarkers = {};
-        }
-    </script>
-
-    <!-- Load Google Maps API -->
-    <script async defer
-        src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap">
-    </script>
+    </main>
 </body>
 </html> 
